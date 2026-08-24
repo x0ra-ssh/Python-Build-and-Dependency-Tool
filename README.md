@@ -1,152 +1,277 @@
 # Python Build & Dependency Tool
 
-A lightweight command-line utility for analyzing Python projects, identifying imported dependencies, installing missing packages, and packaging applications into standalone executables.
+A lightweight Python utility for **dependency discovery, package installation, and executable generation**.
 
-The goal is simple: reduce the repetitive setup involved in taking a Python script from source code to a runnable application without turning the project into another elaborate configuration ritual.
+The tool analyzes Python source code using the Abstract Syntax Tree (AST), identifies imported modules, resolves common Python-to-PyPI naming differences, installs missing dependencies, and optionally packages Python applications into standalone executables using PyInstaller.
+
+It is intentionally small, transparent, and command-line oriented.
 
 ## Features
 
-* **Automatic dependency detection**
+* **AST-based dependency scanning**
 
-  * Parses Python source files using the AST module.
-  * Identifies imported modules without executing the target source code.
-  * Includes mappings for common cases where Python import names differ from PyPI package names.
+  * Inspects Python source without executing it.
+  * Detects `import` and `from ... import ...` statements.
+  * Recursively processes Python files inside directories.
 
-* **Dependency installation**
+* **Automatic dependency installation**
 
-  * Detects packages that are unavailable in the current Python environment.
-  * Installs missing dependencies through `pip`.
+  * Ignores Python standard-library modules.
+  * Detects unavailable third-party imports.
+  * Maps common import names to their corresponding PyPI packages.
+  * Installs missing packages through the active Python environment.
 
 * **Executable generation**
 
-  * Uses [PyInstaller](https://pyinstaller.org/) to package Python applications.
-  * Supports both CLI and GUI-oriented applications.
+  * Uses PyInstaller to create standalone executables.
+  * Supports single-file builds with `--onefile`.
+  * Automatically detects common GUI frameworks.
+  * Supports explicit CLI or GUI build modes.
   * Supports custom application icons.
 
 * **Dry-run mode**
 
-  * Preview dependency installation and build operations without modifying the environment.
+  * Inspect missing dependencies without installing anything.
 
-* **Multiple source files**
+* **Interactive mode**
 
-  * Analyze and build individual Python files or multiple targets.
+  * Provides a simple menu-driven workflow when launched without arguments.
 
 ## Requirements
 
-* Python 3.8+
+* Python 3.10+
 * `pip`
-* `PyInstaller`
+* Internet access when dependencies need to be installed
 
-Install PyInstaller with:
+PyInstaller is installed automatically when an executable build is requested and PyInstaller is not already available.
+
+## Installation
+
+Clone the repository:
 
 ```bash
-python -m pip install pyinstaller
+git clone https://github.com/x0ra-ssh/Python-Build-and-Dependency-Tool.git
+cd Python-Build-and-Dependency-Tool
 ```
+
+No additional installation is required to run the tool directly.
 
 ## Usage
 
-Run the tool against a Python file:
-
-```bash
-python install.py main.py
-```
-
-The tool will inspect the source file, determine its dependencies, install missing packages, and prepare the requested build.
-
 ### Interactive Mode
 
-Running the tool without a target launches its interactive workflow:
+Run the tool without arguments:
 
 ```bash
 python install.py
 ```
 
+The interactive menu provides options to:
+
+1. Scan and install dependencies
+2. Perform a dry dependency scan
+3. Build an executable with automatic GUI/CLI detection
+4. Build an executable in CLI mode
+5. Build an executable in GUI mode
+6. Exit
+
+### Scan a Python File
+
+```bash
+python install.py app.py
+```
+
+The tool analyzes the specified file and installs missing dependencies.
+
+### Scan a Directory
+
+```bash
+python install.py ./src
+```
+
+All `.py` files inside the directory and its subdirectories are analyzed.
+
 ### Dry Run
 
-To inspect what the tool intends to do without installing dependencies or creating an executable:
+To inspect dependencies without installing them:
 
 ```bash
-python install.py main.py --dry-run
+python install.py app.py --dry-run
 ```
 
-### Build a CLI Application
+This is useful for previewing what the tool considers missing before allowing it to modify the environment.
+
+## Building Executables
+
+### Automatic Mode
 
 ```bash
-python install.py main.py --exe --cli
+python install.py app.py --exe
 ```
 
-### Build a GUI Application
+The tool determines whether the application appears to be GUI-oriented based on imported frameworks.
+
+### CLI / Console Mode
 
 ```bash
-python install.py main.py --exe --gui
+python install.py app.py --exe --cli
 ```
+
+The generated application retains its console window.
+
+### GUI Mode
+
+```bash
+python install.py app.py --exe --gui
+```
+
+The generated application is built with PyInstaller's `--noconsole` option.
 
 ### Custom Icon
 
 ```bash
-python install.py main.py --exe --icon app.ico
+python install.py app.py --exe --icon logo.ico
 ```
 
-## How It Works
+The supplied `.ico` file is passed to PyInstaller during the build.
 
-The tool follows a straightforward pipeline:
+## Dependency Detection
 
-```text
-Python Source
-     │
-     ▼
-AST Analysis
-     │
-     ▼
-Import Detection
-     │
-     ▼
-Dependency Mapping
-     │
-     ▼
-Dependency Verification
-     │
-     ▼
-Missing Packages ──► pip
-     │
-     ▼
-PyInstaller
-     │
-     ▼
-Standalone Executable
-```
-
-Python source files are parsed with the standard-library `ast` module rather than executed during dependency discovery. This allows the tool to inspect imports while avoiding unnecessary execution of the target application.
-
-## Import Mapping
-
-Python import names and PyPI distribution names do not always match.
+The tool parses source files using Python's `ast` module.
 
 For example:
 
-| Import    | PyPI Package     |
-| --------- | ---------------- |
-| `cv2`     | `opencv-python`  |
-| `PIL`     | `Pillow`         |
-| `bs4`     | `beautifulsoup4` |
-| `sklearn` | `scikit-learn`   |
+```python
+import requests
+import cv2
+from PIL import Image
+```
 
-The tool maintains mappings for known cases such as these.
+The scanner extracts the top-level modules:
 
-## Build Output
+```text
+requests
+cv2
+PIL
+```
 
-When executable generation is enabled, PyInstaller handles the final packaging process.
+Standard-library modules are excluded automatically.
 
-Typical output:
+For imports where the Python module name differs from the PyPI distribution name, the tool maintains an internal mapping.
+
+### Current Mappings
+
+| Python Import   | PyPI Package     |
+| --------------- | ---------------- |
+| `cv2`           | `opencv-python`  |
+| `PIL`           | `Pillow`         |
+| `bs4`           | `beautifulsoup4` |
+| `yaml`          | `PyYAML`         |
+| `sklearn`       | `scikit-learn`   |
+| `wx`            | `wxPython`       |
+| `fitz`          | `PyMuPDF`        |
+| `crypto`        | `pycryptodome`   |
+| `serial`        | `pyserial`       |
+| `customtkinter` | `customtkinter`  |
+
+## Build Process
+
+When executable generation is requested, the workflow is:
+
+```text
+Python Source
+      │
+      ▼
+   AST Scan
+      │
+      ▼
+Import Detection
+      │
+      ▼
+Standard Library Filtering
+      │
+      ▼
+Dependency Mapping
+      │
+      ▼
+Missing Dependency Detection
+      │
+      ▼
+     pip
+      │
+      ▼
+   PyInstaller
+      │
+      ▼
+Standalone Executable
+```
+
+PyInstaller is invoked through the active Python interpreter:
+
+```bash
+python -m PyInstaller
+```
+
+This keeps the build process tied to the Python environment in which the tool is being executed.
+
+## GUI Detection
+
+The tool recognizes several common GUI frameworks, including:
+
+* Tkinter
+* PyQt5
+* PyQt6
+* PySide2
+* PySide6
+* wxPython
+* CustomTkinter
+* Kivy
+* Pygame
+* Flet
+
+If one of these frameworks is detected, the tool can automatically select PyInstaller's GUI/no-console mode.
+
+CLI and GUI behavior can also be explicitly overridden with:
+
+```bash
+--cli
+```
+
+or:
+
+```bash
+--gui
+```
+
+## Output
+
+PyInstaller normally produces its build artifacts in:
 
 ```text
 build/
 dist/
-    application.exe
-application.spec
 ```
 
-The exact output depends on the selected PyInstaller options and the target application.
+The resulting standalone executable is placed inside the `dist/` directory.
+
+The executable can then be distributed independently of the original Python source environment, subject to PyInstaller's platform-specific packaging requirements.
+
+## Limitations
+
+Dependency discovery is based on static import analysis and therefore cannot identify every possible runtime dependency.
+
+The scanner may not detect dependencies introduced through:
+
+* Dynamic imports
+* Plugin systems
+* Runtime-generated module names
+* External configuration
+* Optional dependencies
+* Packages imported indirectly by another dependency
+
+Import names also do not always correspond directly to PyPI distribution names. The built-in mapping therefore covers known exceptions rather than attempting to infer every possible package name.
+
+The tool should currently be considered a **lightweight build utility**, not a replacement for established Python packaging systems.
 
 ## Project Structure
 
@@ -158,65 +283,36 @@ Python-Build-and-Dependency-Tool/
 └── .gitignore
 ```
 
-## Design Philosophy
-
-The project intentionally keeps its implementation small.
-
-Rather than attempting to replace Python's entire packaging ecosystem, it focuses on automating a few common tasks:
-
-1. Discover dependencies.
-2. Install missing packages.
-3. Build the application.
-4. Produce a distributable executable.
-
-The project is currently experimental and should be considered a lightweight build utility rather than a replacement for established package managers or build systems.
-
-## Limitations
-
-Dependency discovery through static imports has inherent limitations.
-
-The tool may not detect dependencies introduced through:
-
-* Dynamic imports
-* Plugin systems
-* Runtime-generated module names
-* External configuration
-* Optional dependencies
-* Dependencies imported indirectly by another package
-
-Import names also cannot always be reliably converted into PyPI distribution names. The mapping table therefore covers known exceptions rather than attempting to solve package-name resolution universally.
-
 ## Roadmap
 
-Planned improvements include:
-
-* [ ] `pyproject.toml` support
-* [ ] Explicit dependency declarations
-* [ ] Improved standard-library detection
-* [ ] Better local-module detection
-* [ ] Dependency version handling
-* [ ] Virtual-environment management
-* [ ] Dependency locking
-* [ ] Improved build configuration
-* [ ] Automated tests
-* [ ] CI/CD integration
-* [ ] Package the tool itself as a proper CLI
+* [ ] Improve local-module detection
+* [ ] Expand import-to-PyPI mappings
+* [ ] Add explicit dependency configuration
+* [ ] Add `pyproject.toml` support
+* [ ] Add dependency version handling
+* [ ] Add virtual-environment management
+* [ ] Add dependency locking
+* [ ] Improve build configuration
+* [ ] Add automated tests
+* [ ] Add CI/CD
+* [ ] Package the tool as an installable CLI
 * [ ] Publish releases through PyPI
 
 ## Contributing
 
 Contributions are welcome.
 
-Before submitting a change:
+When contributing:
 
-1. Keep the implementation focused.
-2. Avoid introducing unnecessary dependencies.
-3. Test changes against both simple and multi-file Python projects.
-4. Document new CLI options and behavior.
-5. Keep security implications in mind when modifying dependency installation.
+1. Keep changes focused and minimal.
+2. Avoid unnecessary dependencies.
+3. Test against both individual Python files and directories.
+4. Test dependency detection before modifying installation behavior.
+5. Document new command-line options.
+6. Consider the security implications of automatically installing packages.
 
 ## License
 
 This project is licensed under the **GNU General Public License v3.0**.
 
-See [`LICENSE`](LICENSE) for the complete license text.
+See [`LICENSE`](LICENSE) for the full license text.
